@@ -4,48 +4,38 @@ require 'json'
 require 'jwt'
 require 'pp'
 
-def checkcase(keys, target)
+# check whether hmethod belongs to event.keys
+def checkcase(keys, hmethod)
   for key in keys
     key1 = key
-    if key1.downcase == target
+    if key1.downcase == hmethod
       return key
     end
   end
-  return target
+  return hmethod
 end
 
 def main(event:, context:)
   # You shouldn't need to use context, but its fields are explained here:
   # https://docs.aws.amazon.com/lambda/latest/dg/ruby-context.html
 
-  # debugging
-=begin
-  puts "Printing event: "
-  puts event
-  puts event['httpMethod']
-=end
-  
-  # check if httpMethod field is present
+  # check whether httpmethod is exist
   w_httpmethod = checkcase(event.keys, 'httpmethod')
   begin
-  # event.fetch('httpMethod')
     event.fetch(w_httpmethod)
   rescue KeyError
     puts "httpMethod not in event"
     response(body: event, status: 405)
   else
-    #if event['httpMethod']!= 'POST' and event['httpMethod']!= 'GET'
     if event[w_httpmethod] != 'POST' and event[w_httpmethod] != 'GET'
-      puts "neither POST nor GET request"
+      puts "Not POST or GET request"
       response(body: event, status: 405)
 
     # POST
-    #elsif event['httpMethod'] == 'POST'
     elsif event[w_httpmethod] == 'POST' 
-      puts "detected request as POST"
+      puts "POST Request"
       w_headers = checkcase(event.keys, 'headers')
       begin
-        #event.fetch('headers')
         event.fetch(w_headers)
       rescue KeyError
         puts "No headers"
@@ -57,17 +47,15 @@ def main(event:, context:)
         event['headers'].each do |k,v|
           header_hash[k.downcase] = v
         end
-        puts "header_hash", header_hash
-        #w_contenttype = header_hash['content-type']
-        #puts "w_contenttype", w_contenttype
+        #puts "header_hash", header_hash
+        puts header_hash
         begin
-          #event['headers'].fetch('Content-Type')
-          #event[w_headers].fetch('Content-Type')
           header_hash.fetch('content-type')
         rescue KeyError
           puts "No Content-Type"
           response(body: event, status: 405)
         else
+          # Responds 405: content-type wrong
           if header_hash['content-type'] != 'application/json'
             puts "Invalid Content-Type"
             response(body: event, status: 415)
@@ -78,13 +66,15 @@ def main(event:, context:)
               puts "no body"
               response(body: event, status: 405)
             else
+              # respond 422
               begin
                 JSON.parse(event['body'])
               rescue => e
                 puts e
-                puts "body not JSON"
+                puts "body is not json"
                 response(body: "", status: 422)
               else
+                # set exp = 5s, nbf =2s
                 payload = {data: JSON.parse(event['body']), exp: Time.now.to_i + 5 , nbf: Time.now.to_i + 2}
                 token = JWT.encode payload, ENV['JWT_SECRET'], 'HS256'
                 json_doc = {'token' => "#{token}"}
@@ -97,7 +87,7 @@ def main(event:, context:)
 
     # GET
     elsif event[w_httpmethod] == "GET"
-      puts "detected request as GET"
+      puts "GET Request"
       if event['path'] == '/token'
         response(body: event, status: 405)
       elsif event['path'] != '/'
@@ -110,16 +100,18 @@ def main(event:, context:)
         rescue KeyError
           response(body: event, status: 405)
         else
+          #403
           begin
             event['headers'].fetch('Authorization')
           rescue KeyError
-            puts "Authorization is missing"
+            puts "Authorization Error"
             response(body: event, status: 403)
           else
             token = event['headers']['Authorization'].split
-            puts "token: ", token
+            #puts "token: ", token
+            puts token
             if token[0] != 'Bearer'
-              puts "word Bearer missing"
+              puts "Bearer <TOKEN> header is not provided"
               response(body: event, status: 403)
             else
               t = token[1]
@@ -138,7 +130,7 @@ def main(event:, context:)
                 begin
                   payload.fetch('data')
                 rescue KeyError
-                  puts "data field missing in payload"
+                  puts "No data"
                   response(body: event, status: 405)
                 else
                   response(body: payload['data'], status: 200)
