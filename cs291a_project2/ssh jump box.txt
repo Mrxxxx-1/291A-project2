@@ -1,0 +1,12 @@
+ssh -i mingruixu.pem mingruixu@ec2.cs291.com
+
+git clone https://github.com/scalableinternetservices/cs291a_project1_template.git
+
+cd cs291a_project1_template
+ruby function.rb
+
+./deploy.py mingruixu
+
+curl -D-
+curl  -XPOST -D-
+https://eqdv129j3g.execute-api.us-west-2.amazonaws.com/prod/
